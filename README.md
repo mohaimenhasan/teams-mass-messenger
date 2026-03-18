@@ -36,15 +36,19 @@ teams-mass-messenger/
    dotnet build
    ```
 
-3. Edit **alias.txt** — add one Microsoft alias per line (e.g. `johndoe` or `johndoe@microsoft.com`):
+3. **Populate alias.txt** — this file ships empty (with a sample alias). Add one Microsoft alias per line for each person you want to message:
    ```
    johndoe
    janedoe
    someuser@microsoft.com
    ```
+   **Important:** You must populate this file with the aliases you want to message before running the app.
+
+   Rules:
+   - One alias per line
    - Leading/trailing whitespace is trimmed automatically
    - Duplicates are removed (case-insensitive)
-   - `@microsoft.com` suffix is stripped for normalization
+   - `@microsoft.com` suffix is optional (stripped during normalization)
 
 4. Edit **message.txt** — write the message you want to send. Supports multiple lines:
    ```
