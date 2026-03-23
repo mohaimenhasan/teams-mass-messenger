@@ -224,4 +224,120 @@ public partial class MainWindow : Window
         _cts?.Cancel();
         Log("Stop requested...");
     }
+
+    private void ImportClipboard_Click(object sender, RoutedEventArgs e)
+    {
+        if (!Clipboard.ContainsText())
+        {
+            System.Windows.MessageBox.Show("Clipboard is empty. Copy the team members list from Teams first.",
+                "No Data", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var text = Clipboard.GetText();
+        var parsed = ParseTeamsMemberData(text);
+
+        if (parsed.Count == 0)
+        {
+            System.Windows.MessageBox.Show(
+                "No email addresses or aliases found in clipboard.\n\n" +
+                "How to copy members from Teams:\n" +
+                "1. Open your team in Teams\n" +
+                "2. Click \"...\" > Manage team > Members\n" +
+                "3. Select all (Ctrl+A) and copy (Ctrl+C)\n" +
+                "4. Come back here and click Import again",
+                "No Members Found", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        // Merge with existing, deduplicating
+        var existing = new HashSet<string>(_aliases.Select(a => a.Alias), StringComparer.OrdinalIgnoreCase);
+        int added = 0;
+        foreach (var alias in parsed)
+        {
+            if (existing.Add(alias))
+            {
+                _aliases.Add(new AliasEntry { Alias = alias });
+                added++;
+            }
+        }
+
+        UpdateCount();
+        Log($"Imported {added} new aliases from clipboard ({parsed.Count} total parsed, {parsed.Count - added} duplicates skipped).");
+    }
+
+    private static List<string> ParseTeamsMemberData(string text)
+    {
+        var results = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        // Split on common delimiters: newlines, tabs, commas, semicolons
+        var tokens = text.Split(new[] { '\r', '\n', '\t', ',', ';' }, StringSplitOptions.RemoveEmptyEntries);
+
+        foreach (var raw in tokens)
+        {
+            var token = raw.Trim();
+
+            // Match email addresses (user@domain)
+            var emailMatch = System.Text.RegularExpressions.Regex.Match(token,
+                @"[\w.\-]+@[\w.\-]+\.[\w]+");
+            if (emailMatch.Success)
+            {
+                var email = emailMatch.Value;
+                // Extract alias (part before @)
+                var alias = email.Substring(0, email.IndexOf('@'));
+                if (!string.IsNullOrWhiteSpace(alias))
+                    results.Add(alias);
+                continue;
+            }
+
+            // Skip tokens that look like role labels, dates, or UI artifacts
+            if (token.Length > 50) continue;
+            if (token.Equals("Owner", StringComparison.OrdinalIgnoreCase)) continue;
+            if (token.Equals("Member", StringComparison.OrdinalIgnoreCase)) continue;
+            if (token.Equals("Guest", StringComparison.OrdinalIgnoreCase)) continue;
+            if (token.Equals("Members", StringComparison.OrdinalIgnoreCase)) continue;
+            if (token.Equals("Owners", StringComparison.OrdinalIgnoreCase)) continue;
+            if (token.Equals("Name", StringComparison.OrdinalIgnoreCase)) continue;
+            if (token.Equals("Role", StringComparison.OrdinalIgnoreCase)) continue;
+            if (token.Equals("Title", StringComparison.OrdinalIgnoreCase)) continue;
+            if (token.Equals("Location", StringComparison.OrdinalIgnoreCase)) continue;
+            if (System.Text.RegularExpressions.Regex.IsMatch(token, @"^\d")) continue; // starts with digit
+            if (token.Contains(' ') && !token.Contains('@')) continue; // likely a display name, skip
+
+            // Looks like it could be an alias (single word, no spaces)
+            if (System.Text.RegularExpressions.Regex.IsMatch(token, @"^[\w.\-]+$") && token.Length >= 2)
+            {
+                results.Add(token);
+            }
+        }
+
+        return results.ToList();
+    }
+
+    private void ExportAliases_Click(object sender, RoutedEventArgs e)
+    {
+        if (_aliases.Count == 0)
+        {
+            System.Windows.MessageBox.Show("No aliases to export.", "Empty", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        // Find alias.txt path
+        var exeDir = AppDomain.CurrentDomain.BaseDirectory;
+        var candidates = new[]
+        {
+            Path.Combine(exeDir, "alias.txt"),
+            Path.Combine(exeDir, "..", "..", "..", "..", "alias.txt"),
+        };
+
+        string aliasFile = candidates[0];
+        foreach (var c in candidates)
+        {
+            if (File.Exists(c)) { aliasFile = c; break; }
+        }
+
+        var lines = _aliases.Select(a => a.Alias).ToList();
+        File.WriteAllLines(aliasFile, lines);
+        Log($"Exported {lines.Count} aliases to {Path.GetFullPath(aliasFile)}");
+    }
 }

@@ -25,6 +25,12 @@
                 <Button Content="Deselect All" Click="DeselectAll_Click" Padding="8,3" Margin="0,0,5,0"/>
                 <TextBlock x:Name="CountText" VerticalAlignment="Center" Margin="5,0,0,0" Foreground="Gray"/>
             </StackPanel>
+            <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,5">
+                <Button Content="📋 Import from Clipboard" Click="ImportClipboard_Click" Padding="8,3" Margin="0,0,5,0"
+                        Background="#5B2D8E" Foreground="White" FontSize="11"/>
+                <Button Content="💾 Export to alias.txt" Click="ExportAliases_Click" Padding="8,3" Margin="0,0,5,0"
+                        FontSize="11"/>
+            </StackPanel>
             <DataGrid x:Name="AliasGrid" AutoGenerateColumns="False" CanUserAddRows="False"
                       HeadersVisibility="Column" IsReadOnly="False" SelectionMode="Single"
                       VerticalScrollBarVisibility="Auto">
