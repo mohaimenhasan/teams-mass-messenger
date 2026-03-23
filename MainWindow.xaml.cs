@@ -50,7 +50,7 @@ public partial class MainWindow : Window
         var candidates = new[]
         {
             Path.Combine(exeDir, "alias.txt"),
-            Path.Combine(exeDir, "..", "..", "..", "..", "alias.txt"), // dev: bin/Debug/net8.0-windows/ -> repo root
+            Path.Combine(exeDir, "..", "..", "..", "alias.txt"), // dev: bin/Debug/net8.0-windows/ -> project root
         };
 
         string? aliasFile = null;
