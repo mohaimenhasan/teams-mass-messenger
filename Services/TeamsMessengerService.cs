@@ -95,8 +95,24 @@ public class TeamsMessengerService
 
     /// <summary>
     /// Full workflow: open chat, wait for Teams to load it, focus, paste, send.
+    /// If the alias contains spaces, it's treated as a display name and searched in Teams.
     /// </summary>
     public async Task<bool> SendMessageToAlias(string alias, string message, int delayMs,
+        CancellationToken ct, Action<string>? log = null)
+    {
+        bool isDisplayName = alias.Contains(' ');
+
+        if (isDisplayName)
+        {
+            return await SendViaSearch(alias, message, delayMs, ct, log);
+        }
+        else
+        {
+            return await SendViaDeepLink(alias, message, delayMs, ct, log);
+        }
+    }
+
+    private async Task<bool> SendViaDeepLink(string alias, string message, int delayMs,
         CancellationToken ct, Action<string>? log = null)
     {
         var email = alias.Contains('@') ? alias : $"{alias}@microsoft.com";
@@ -104,26 +120,75 @@ public class TeamsMessengerService
         log?.Invoke($"Opening chat with {email}...");
         OpenChat(email);
 
-        // Wait for Teams to open the chat
         await Task.Delay(delayMs, ct);
 
-        // Focus Teams window
         log?.Invoke("Focusing Teams window...");
         bool focused = FocusTeamsWindow();
         if (!focused)
-        {
             log?.Invoke("WARNING: Could not find Teams window. Attempting to send anyway...");
-        }
 
         await Task.Delay(500, ct);
 
-        // Paste and send must run on STA thread for clipboard access
         log?.Invoke("Pasting and sending message...");
         Application.Current.Dispatcher.Invoke(() => PasteAndSend(message));
 
         await Task.Delay(1000, ct);
 
         log?.Invoke($"Message sent to {email}.");
+        return true;
+    }
+
+    /// <summary>
+    /// Searches for a person by display name in Teams, opens new chat with first result, pastes and sends.
+    /// Flow: Focus Teams → Ctrl+N (new chat) → type name → wait for search → Enter (select first) → paste → send
+    /// </summary>
+    private async Task<bool> SendViaSearch(string displayName, string message, int delayMs,
+        CancellationToken ct, Action<string>? log = null)
+    {
+        log?.Invoke($"Searching Teams for \"{displayName}\"...");
+
+        // Focus Teams first
+        bool focused = FocusTeamsWindow();
+        if (!focused)
+        {
+            log?.Invoke("WARNING: Could not find Teams window.");
+            return false;
+        }
+
+        await Task.Delay(500, ct);
+
+        // Ctrl+N to open a new chat
+        _inputSimulator.Keyboard.ModifiedKeyStroke(VirtualKeyCode.CONTROL, VirtualKeyCode.VK_N);
+        await Task.Delay(1500, ct);
+
+        // Type the display name in the "To:" field
+        log?.Invoke($"Typing \"{displayName}\" in search...");
+        _inputSimulator.Keyboard.TextEntry(displayName);
+
+        // Wait for search results to populate
+        await Task.Delay(delayMs, ct);
+
+        // Press Down arrow to select first result, then Enter to confirm
+        log?.Invoke("Selecting first search result...");
+        _inputSimulator.Keyboard.KeyPress(VirtualKeyCode.DOWN);
+        await Task.Delay(300, ct);
+        _inputSimulator.Keyboard.KeyPress(VirtualKeyCode.RETURN);
+
+        // Wait for chat to open
+        await Task.Delay(1500, ct);
+
+        // Tab to move focus from "To:" field to the compose box
+        log?.Invoke("Moving focus to compose box...");
+        _inputSimulator.Keyboard.KeyPress(VirtualKeyCode.TAB);
+        await Task.Delay(500, ct);
+
+        // Now paste the message and send
+        log?.Invoke("Pasting and sending message...");
+        Application.Current.Dispatcher.Invoke(() => PasteAndSend(message));
+
+        await Task.Delay(1000, ct);
+
+        log?.Invoke($"Message sent to \"{displayName}\".");
         return true;
     }
 }
